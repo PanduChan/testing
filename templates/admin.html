@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Kelola Data — Prediksi KPR FLPP Bungo{% endblock %}
+{% block body %}
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">FLPP</span>
+      <span class="brand-name">Prediksi Bungo</span>
+    </div>
+    <nav class="side-nav">
+      <a class="side-link" href="{{ url_for('dashboard') }}">Ringkasan Dashboard</a>
+      <a class="side-link" href="{{ url_for('api_forecast') }}" target="_blank">Data Forecast (JSON)</a>
+      <a class="side-link active" href="{{ url_for('admin') }}">Kelola Data (Admin)</a>
+    </nav>
+    <div class="side-footer">
+      <div class="side-user">Masuk sebagai <strong>{{ current_user.id }}</strong></div>
+      <a href="{{ url_for('logout') }}" class="side-logout">Keluar</a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Kabupaten Bungo &middot; Provinsi Jambi</div>
+        <h1>Kelola Data Historis</h1>
+      </div>
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Status Data Saat Ini</h2>
+        <span class="panel-sub">File aktif: <code>data/dataset_flpp_raw.csv</code></span>
+      </div>
+
+      {% if not status.exists %}
+        <div class="empty-state">
+          <p>Belum ada file data. Unggah file CSV pertama melalui form di bawah.</p>
+        </div>
+      {% else %}
+        <div class="metric-list">
+          <div class="metric-row">
+            <span>Terakhir diperbarui</span><strong>{{ status.modified_at }}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Ukuran file</span><strong>{{ status.size_kb }} KB</strong>
+          </div>
+          {% if status.is_valid %}
+          <div class="metric-row">
+            <span>Status validasi</span>
+            <strong><span class="status-badge status-badge--ok">Valid</span></strong>
+          </div>
+          <div class="metric-row">
+            <span>Jumlah baris</span><strong>{{ status.n_rows }}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Jumlah pengembang</span><strong>{{ status.n_pengembang }}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Rentang periode</span><strong>{{ status.periode_awal }} &ndash; {{ status.periode_akhir }}</strong>
+          </div>
+          {% else %}
+          <div class="metric-row">
+            <span>Status validasi</span>
+            <strong><span class="status-badge status-badge--warn">Bermasalah</span></strong>
+          </div>
+          <div class="metric-row">
+            <span>Detail masalah</span><strong>{{ status.error }}</strong>
+          </div>
+          {% endif %}
+          <div class="metric-row">
+            <span>Cadangan tersedia</span><strong>{{ 'Ya' if status.has_backup else 'Tidak' }}</strong>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <a href="{{ url_for('dashboard') }}" class="btn btn-primary" target="_blank">Lihat Dashboard Terbaru</a>
+          {% if status.has_backup %}
+          <form method="POST" action="{{ url_for('admin_restore') }}" style="display:inline;">
+            <button type="submit" class="btn btn-ghost">Pulihkan Data Sebelumnya</button>
+          </form>
+          {% endif %}
+        </div>
+      {% endif %}
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Unggah Data Baru</h2>
+        <span class="panel-sub">Menggantikan data historis yang dipakai untuk pemodelan ARIMA</span>
+      </div>
+
+      <form method="POST" enctype="multipart/form-data">
+        <div class="upload-zone">
+          <input type="file" name="csv_file" accept=".csv" required>
+          <p class="upload-hint">
+            Format 1 (olahan): kolom <code>periode</code>, <code>pengembang</code>, <code>jumlah_realisasi</code><br>
+            Format 2 (mentah tapera.go.id): kolom <code>Tanggal Pencairan</code>, <code>Nama Pengembang</code>, dst.<br>
+            File akan divalidasi otomatis sebelum menggantikan data lama. Data lama akan dicadangkan otomatis.
+          </p>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Unggah &amp; Perbarui Data</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Catatan</h2>
+      </div>
+      <p class="upload-hint">
+        Dashboard publik (halaman "Ringkasan Dashboard") menjalankan ulang seluruh pipeline
+        ARIMA setiap kali dibuka. Begitu data baru diunggah di sini, pengunjung yang membuka
+        dashboard akan langsung melihat hasil peramalan terbaru — tanpa perlu tombol "proses
+        ulang" terpisah.
+      </p>
+    </section>
+
+  </main>
+</div>
+{% endblock %}

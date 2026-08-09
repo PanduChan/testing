@@ -1,0 +1,19 @@
+# Environment & rahasia
+.env
+venv/
+__pycache__/
+*.pyc
+
+# Data (opsional: keluarkan komentar baris di bawah kalau dataset tidak ingin ikut ke repo publik)
+# data/*.csv
+data/*.backup.csv
+data/_upload_tmp.csv
+
+# Logs
+*.log
+logs/
+
+# OS / editor
+.DS_Store
+.vscode/
+*.swp

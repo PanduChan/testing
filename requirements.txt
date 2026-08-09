@@ -1,0 +1,10 @@
+Flask>=3.0
+Flask-Login>=0.6
+pandas>=2.2
+numpy>=1.26
+statsmodels>=0.14
+pmdarima>=2.0
+scikit-learn>=1.5
+python-dotenv>=1.0
+gunicorn>=22.0
+pytest>=8.0

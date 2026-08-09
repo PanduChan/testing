@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — Prediksi KPR FLPP Bungo{% endblock %}
+{% block body %}
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark">FLPP</span>
+      <span class="brand-name">Prediksi Bungo</span>
+    </div>
+    <nav class="side-nav">
+      <a class="side-link active" href="{{ url_for('dashboard') }}">Ringkasan Dashboard</a>
+      <a class="side-link" href="{{ url_for('api_forecast') }}" target="_blank">Data Forecast (JSON)</a>
+      {% if current_user.is_authenticated %}
+      <a class="side-link" href="{{ url_for('admin') }}">Kelola Data (Admin)</a>
+      {% endif %}
+    </nav>
+    <div class="side-footer">
+      {% if current_user.is_authenticated %}
+      <div class="side-user">Masuk sebagai <strong>{{ current_user.id }}</strong></div>
+      <a href="{{ url_for('logout') }}" class="side-logout">Keluar</a>
+      {% else %}
+      <a href="{{ url_for('login') }}" class="side-logout">Login Admin</a>
+      {% endif %}
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">Kabupaten Bungo &middot; Provinsi Jambi{% if pengembang_aktif %} &middot; {{ pengembang_aktif }}{% endif %}</div>
+        <h1>Realisasi &amp; Proyeksi KPR FLPP</h1>
+      </div>
+      {% if has_data and order %}
+      <div class="model-badge">ARIMA{{ order }} &middot; grid-search AIC (d via ADF)</div>
+      {% elif has_data %}
+      <div class="model-badge model-badge--muted">Data historis saja (belum ada proyeksi)</div>
+      {% endif %}
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% if not has_data %}
+      <div class="empty-state">
+        <p>Data belum bisa diproses. Periksa file <code>data/dataset_flpp_raw.csv</code> lalu muat ulang halaman ini.</p>
+      </div>
+    {% else %}
+
+    <details class="guide-box">
+      <summary>📖 Cara membaca dashboard ini (klik untuk buka)</summary>
+      <div class="guide-content">
+        <p><strong>Kartu angka di atas</strong> menunjukkan ringkasan realisasi KPR FLPP: total, rata-rata bulanan, bulan terakhir, dan perkiraan bulan/periode ke depan.</p>
+        <p><strong>Grafik garis</strong>: garis biru tua = data yang sudah benar-benar terjadi (historis). Garis putus-putus kuning = perkiraan sistem untuk bulan-bulan ke depan (bukan angka pasti). Area kuning muda di sekitarnya = rentang kemungkinan (semakin lebar, semakin tidak pasti).</p>
+        <p><strong>Panel "Evaluasi Model"</strong> menjawab pertanyaan "seberapa akurat sistem ini?" &mdash; MAPE adalah rata-rata persentase selisih antara perkiraan dan kenyataan (semakin kecil semakin baik).</p>
+        <p><strong>Panel "Uji Diagnostik"</strong> menjawab pertanyaan berbeda: "apakah metode statistiknya sah dipakai?" &mdash; ini bukan soal akurasi, tapi soal keabsahan model secara ilmiah.</p>
+        <p>Arahkan kursor ke ikon <strong>ⓘ</strong> di sebelah istilah teknis untuk penjelasan singkat.</p>
+      </div>
+    </details>
+
+    <form class="filter-bar" method="get" action="{{ url_for('dashboard') }}">
+      <div class="filter-field">
+        <label for="pengembang">Pengembang</label>
+        <select name="pengembang" id="pengembang">
+          <option value="">Semua Pengembang (Kabupaten Bungo)</option>
+          {% for p in daftar_pengembang %}
+          <option value="{{ p }}" {{ 'selected' if p == pengembang_aktif else '' }}>{{ p }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="filter-field">
+        <label for="horizon">Horizon Peramalan</label>
+        <select name="horizon" id="horizon">
+          {% for h in horizon_pilihan %}
+          <option value="{{ h }}" {{ 'selected' if h == horizon_aktif else '' }}>{{ h }} Bulan{{ ' (default Tujuan Penelitian)' if h == 12 else '' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Terapkan</button>
+      {% if pengembang_aktif %}
+      <a href="{{ url_for('dashboard') }}" class="btn btn-ghost">Reset ke Agregat</a>
+      {% endif %}
+      <button type="button" class="btn btn-ghost" onclick="window.print()">🖨️ Unduh Laporan (PDF)</button>
+    </form>
+
+    <section class="kpi-row">
+      <div class="kpi-card">
+        <span class="kpi-icon">🏘️</span>
+        <span class="kpi-label">Total Realisasi</span>
+        <span class="kpi-value">{{ kpi.total_realisasi }}</span>
+        <span class="kpi-unit">unit rumah</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-icon">📊</span>
+        <span class="kpi-label">Rata-rata Bulanan</span>
+        <span class="kpi-value">{{ kpi.rata_rata_bulanan }}</span>
+        <span class="kpi-unit">unit / bulan</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-icon">📅</span>
+        <span class="kpi-label">Realisasi Bulan Terakhir</span>
+        <span class="kpi-value">{{ kpi.realisasi_terakhir }}</span>
+        <span class="kpi-unit">unit</span>
+      </div>
+      {% if ada_proyeksi %}
+      <div class="kpi-card kpi-card--accent">
+        <span class="kpi-icon">🔮</span>
+        <span class="kpi-label">Proyeksi Bulan Depan</span>
+        <span class="kpi-value">{{ kpi.prediksi_bulan_depan }}</span>
+        <span class="kpi-unit">unit (estimasi ARIMA)</span>
+      </div>
+      <div class="kpi-card kpi-card--accent">
+        <span class="kpi-icon">📈</span>
+        <span class="kpi-label">Total Proyeksi {{ horizon_aktif }} Bulan ke Depan</span>
+        <span class="kpi-value">{{ kpi.total_proyeksi_horizon | round(0, 'floor') | int }}</span>
+        <span class="kpi-unit">unit (akumulasi {{ horizon_aktif }} bulan)</span>
+      </div>
+      {% else %}
+      <div class="kpi-card kpi-card--muted">
+        <span class="kpi-icon">⏳</span>
+        <span class="kpi-label">Proyeksi</span>
+        <span class="kpi-value">&ndash;</span>
+        <span class="kpi-unit">data historis belum cukup</span>
+      </div>
+      {% endif %}
+    </section>
+
+    {% if ada_proyeksi %}
+    <p class="horizon-note">
+      Catatan: sistem memproyeksikan realisasi untuk <strong>{{ horizon_aktif }} bulan ke depan</strong>
+      (dapat diubah lewat filter "Horizon Peramalan" di atas). Angka "Proyeksi Bulan Depan" adalah
+      estimasi bulan pertama saja; grafik di bawah menampilkan keseluruhan {{ horizon_aktif }} bulan
+      proyeksi tersebut, termasuk rentang ketidakpastiannya (interval kepercayaan 95%).
+    </p>
+    {% endif %}
+
+    <section class="panel panel-chart">
+      <div class="panel-head">
+        <h2>Tren Historis{% if ada_proyeksi %} &amp; Proyeksi {{ horizon_aktif }} Bulan{% endif %}</h2>
+        <span class="panel-sub">
+          {% if ada_proyeksi %}Pita bayangan menunjukkan interval kepercayaan 95%{% else %}Menampilkan data historis apa adanya (lihat catatan di atas){% endif %}
+        </span>
+      </div>
+      <canvas id="trendChart" height="110"></canvas>
+
+      {% if ada_proyeksi %}
+      <p class="chart-insight">
+        💡 <strong>Interpretasi singkat:</strong> berdasarkan {{ chart_data.historis_value|length }} bulan data historis,
+        tren realisasi menunjukkan rata-rata {{ kpi.rata_rata_bulanan }} unit/bulan. Untuk {{ horizon_aktif }} bulan ke depan,
+        sistem memperkirakan total sekitar {{ kpi.total_proyeksi_horizon | round(0, 'floor') | int }} unit tambahan,
+        dengan tingkat kepastian yang menurun semakin jauh horizon-nya (lihat pelebaran pita interval pada grafik).
+      </p>
+      {% endif %}
+
+      <details class="data-table-toggle">
+        <summary>📋 Lihat tabel angka bulanan (historis{% if ada_proyeksi %} &amp; proyeksi{% endif %})</summary>
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Periode</th>
+                <th>Jenis</th>
+                <th>Nilai</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for i in range(chart_data.historis_label|length) %}
+              <tr>
+                <td>{{ chart_data.historis_label[i] }}</td>
+                <td>Historis</td>
+                <td>{{ chart_data.historis_value[i] }}</td>
+              </tr>
+              {% endfor %}
+              {% if ada_proyeksi %}
+              {% for i in range(chart_data.forecast_label|length) %}
+              <tr class="row-forecast">
+                <td>{{ chart_data.forecast_label[i] }}</td>
+                <td>Proyeksi</td>
+                <td>{{ chart_data.forecast_value[i] }}</td>
+              </tr>
+              {% endfor %}
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+
+    {% if ada_proyeksi %}
+    <section class="grid-2">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Evaluasi Model</h2>
+          <span class="panel-sub">Split data latih:uji 80:20</span>
+        </div>
+        <div class="metric-list">
+          <div class="metric-row">
+            <span>MAE <span class="info-dot" title="Rata-rata selisih absolut antara prediksi dan nilai sebenarnya, dalam satuan unit rumah.">ⓘ</span></span><strong>{{ evaluation.mae }}</strong>
+          </div>
+          <div class="metric-row">
+            <span>RMSE <span class="info-dot" title="Mirip MAE, tapi memberi bobot lebih besar pada selisih yang besar (lebih sensitif terhadap prediksi yang meleset jauh).">ⓘ</span></span><strong>{{ evaluation.rmse }}</strong>
+          </div>
+          <div class="metric-row">
+            <span>MAPE <span class="info-dot" title="Rata-rata persentase selisih prediksi terhadap nilai sebenarnya. Semakin kecil, semakin akurat. Di bawah 10% dianggap sangat akurat.">ⓘ</span></span>
+            <strong class="{{ 'ok' if evaluation.is_accurate else 'warn' }}">
+              {{ evaluation.mape }}%
+            </strong>
+          </div>
+          <div class="metric-row">
+            <span>Status akurasi</span>
+            <strong class="{{ 'ok' if evaluation.is_accurate else 'warn' }}">
+              {{ 'Baik (MAPE < 10%)' if evaluation.is_accurate else 'Perlu tuning parameter' }}
+            </strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Uji Diagnostik &amp; Stasioneritas</h2>
+          <span class="panel-sub">Metodologi Box-Jenkins</span>
+        </div>
+        <div class="metric-list">
+          <div class="metric-row">
+            <span>ADF statistic <span class="info-dot" title="Augmented Dickey-Fuller Test: menguji apakah data punya pola tren yang konsisten (stasioner) sebelum dimodelkan.">ⓘ</span></span><strong>{{ adf.adf_stat }}</strong>
+          </div>
+          <div class="metric-row">
+            <span>ADF p-value <span class="info-dot" title="Jika di bawah 0.05, data dianggap stasioner (siap dimodelkan tanpa penyesuaian tambahan).">ⓘ</span></span><strong>{{ adf.p_value }}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Ljung-Box p-value <span class="info-dot" title="Menguji apakah masih ada pola yang \'tertinggal\' dan belum tertangkap model. Jika di atas 0.05, model dianggap sudah menangkap seluruh pola yang bisa dijelaskan.">ⓘ</span></span><strong>{{ diagnostics.ljung_box_p_value }}</strong>
+          </div>
+          <div class="metric-row">
+            <span>Residual white noise</span>
+            <strong class="{{ 'ok' if diagnostics.residual_white_noise else 'warn' }}">
+              {{ 'Ya' if diagnostics.residual_white_noise else 'Tidak' }}
+            </strong>
+          </div>
+          <div class="metric-row">
+            <span>AIC / BIC <span class="info-dot" title="Ukuran seberapa efisien model dibanding kombinasi parameter lain. Nilai lebih rendah = lebih baik, dipakai untuk MEMBANDINGKAN model, bukan ukuran akurasi.">ⓘ</span></span><strong>{{ diagnostics.aic }} / {{ diagnostics.bic }}</strong>
+          </div>
+        </div>
+      </div>
+    </section>
+    {% endif %}
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Ringkasan per Pengembang</h2>
+        <span class="panel-sub">Diurutkan berdasarkan total realisasi &mdash; klik nama untuk lihat detail</span>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Pengembang</th>
+            <th>Total Realisasi</th>
+            <th>Rata-rata / Bulan</th>
+            <th>Realisasi Terakhir</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in dev_summary %}
+          <tr class="{{ 'row-active' if row.pengembang == pengembang_aktif else '' }}">
+            <td><a href="{{ url_for('dashboard', pengembang=row.pengembang, horizon=horizon_aktif) }}">{{ row.pengembang }}</a></td>
+            <td>{{ row.total_realisasi }}</td>
+            <td>{{ row.rata_rata_bulanan }}</td>
+            <td>{{ row.realisasi_bulan_terakhir }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+    <script>
+      const chartData = {{ chart_data | tojson }};
+
+      const labels = chartData.historis_label.concat(chartData.forecast_label);
+      const historisSeries = chartData.historis_value.concat(new Array(chartData.forecast_label.length).fill(null));
+      const forecastSeries = chartData.forecast_label.length
+        ? new Array(chartData.historis_value.length - 1).fill(null)
+            .concat([chartData.historis_value[chartData.historis_value.length - 1]])
+            .concat(chartData.forecast_value)
+        : [];
+      const upperSeries = new Array(chartData.historis_value.length).fill(null).concat(chartData.forecast_upper);
+      const lowerSeries = new Array(chartData.historis_value.length).fill(null).concat(chartData.forecast_lower);
+
+      const datasets = [
+        {
+          label: 'Realisasi historis',
+          data: historisSeries,
+          borderColor: '#1B2A4A',
+          backgroundColor: '#1B2A4A',
+          pointRadius: 2,
+          borderWidth: 2.5,
+          tension: 0.3,
+          spanGaps: false,
+        },
+      ];
+
+      if (chartData.forecast_label.length) {
+        datasets.unshift({
+          label: 'Batas atas (95%)',
+          data: upperSeries,
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: '+1',
+          backgroundColor: 'rgba(201,162,39,0.14)',
+          tension: 0.3,
+        });
+        datasets.unshift({
+          label: 'Batas bawah (95%)',
+          data: lowerSeries,
+          borderWidth: 0,
+          pointRadius: 0,
+          fill: false,
+          tension: 0.3,
+        });
+        datasets.push({
+          label: 'Proyeksi ARIMA',
+          data: forecastSeries,
+          borderColor: '#C9A227',
+          backgroundColor: '#C9A227',
+          borderDash: [6, 4],
+          pointRadius: 2,
+          borderWidth: 2.5,
+          tension: 0.3,
+          spanGaps: false,
+        });
+      }
+
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: {
+              labels: {
+                filter: (item) => item.text !== 'Batas bawah (95%)',
+                font: { family: 'Inter', size: 12 },
+              },
+            },
+          },
+          scales: {
+            x: { ticks: { font: { family: 'JetBrains Mono', size: 10 } }, grid: { display: false } },
+            y: { beginAtZero: true, ticks: { font: { family: 'Inter', size: 11 } } },
+          },
+        },
+      });
+    </script>
+    {% endif %}
+  </main>
+</div>
+{% endblock %}

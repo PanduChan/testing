@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Login — Prediksi KPR FLPP Bungo{% endblock %}
+{% block body %}
+<div class="login-screen">
+  <div class="login-roofline" aria-hidden="true">
+    <svg viewBox="0 0 400 60" preserveAspectRatio="none">
+      <polyline points="0,60 40,20 80,60 120,20 160,60 200,20 240,60 280,20 320,60 360,20 400,60"
+        fill="none" stroke="currentColor" stroke-width="2"/>
+    </svg>
+  </div>
+
+  <div class="login-card">
+    <div class="login-eyebrow">Kabupaten Bungo &middot; Provinsi Jambi</div>
+    <h1 class="login-title">Prediksi Realisasi<br>KPR&nbsp;FLPP</h1>
+    <p class="login-sub">Dashboard peramalan berbasis metode ARIMA untuk memantau tren penyaluran fasilitas likuiditas pembiayaan perumahan subsidi.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash-list">
+        {% for category, message in messages %}
+          <div class="flash flash-{{ category }}">{{ message }}</div>
+        {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" class="login-form">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" placeholder="admin" required autofocus>
+
+      <label for="password">Kata sandi</label>
+      <input type="password" id="password" name="password" placeholder="&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;" required>
+
+      <button type="submit">Masuk ke Dashboard</button>
+    </form>
+
+    <div class="login-hint">
+      Prototype &mdash; gunakan <code>admin</code> / <code>bungo2026</code>
+    </div>
+  </div>
+</div>
+{% endblock %}
