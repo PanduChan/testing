@@ -354,13 +354,80 @@ h1, h2 { font-family: 'Fraunces', serif; margin: 0; }
 .status-badge--warn { background: #fbe8e2; color: var(--warn); }
 
 @media (max-width: 900px) {
-  .shell { flex-direction: column; }
-  .sidebar { width: 100%; flex-direction: row; align-items: center; padding: 1rem 1.4rem; }
-  .side-nav { flex-direction: row; }
-  .side-footer { display: none; }
-  .kpi-row { grid-template-columns: repeat(2, 1fr); }
-  .grid-2 { grid-template-columns: 1fr; }
-  .main { padding: 1.5rem 1.2rem 2.5rem; }
+  .shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 1rem 1.4rem;
+    gap: 0.6rem;
+  }
+
+  .brand {
+    flex-shrink: 0;
+  }
+
+  .side-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+  }
+
+  .side-link {
+    white-space: nowrap;
+  }
+
+  .side-footer {
+    display: block;
+    border-top: 0;
+    padding-top: 0;
+    margin-left: auto;
+  }
+
+  .kpi-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid-2 {
+    grid-template-columns: 1fr;
+  }
+
+  .main {
+    padding: 1.5rem 1.2rem 2.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .sidebar {
+    align-items: flex-start;
+  }
+
+  .brand {
+    width: 100%;
+  }
+
+  .side-nav {
+    width: 100%;
+  }
+
+  .side-link {
+    font-size: 0.8rem;
+    padding: 0.5rem 0.6rem;
+  }
+
+  .side-footer {
+    width: 100%;
+    margin-left: 0;
+    padding-top: 0.5rem;
+  }
+
+  .kpi-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* ---------- FILTER BAR (fitur horizon & pengembang) ---------- */
