@@ -552,3 +552,37 @@ h1, h2 { font-family: 'Fraunces', serif; margin: 0; }
   .data-table-toggle .table-scroll { max-height: none; overflow: visible; }
   .topbar h1::after { content: " — Laporan Dicetak"; font-size: 0.6em; color: #999; }
 }
+@media (max-width: 600px) {
+  .panel {
+    overflow: hidden;
+  }
+
+  .table-scroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .data-table {
+    width: 100%;
+    table-layout: fixed;
+    font-size: 0.74rem;
+  }
+
+  .data-table th,
+  .data-table td {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding: 0.45rem 0.3rem;
+  }
+
+  .data-table th:first-child,
+  .data-table td:first-child {
+    width: 40%;
+  }
+
+  .data-table th:not(:first-child),
+  .data-table td:not(:first-child) {
+    width: 20%;
+  }
+}
