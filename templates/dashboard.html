@@ -1,6 +1,34 @@
 {% extends "base.html" %}
 {% block title %}Dashboard — Prediksi KPR FLPP Bungo{% endblock %}
 {% block body %}
+<style>
+  /* Tampilan khusus saat mencetak / "Unduh Laporan (PDF)" — supaya yang
+     tercetak cuma laporan bersih, bukan tampilan situs apa adanya
+     (sidebar, filter, tombol, dan kotak panduan disembunyikan). */
+  @media print {
+    .sidebar,
+    .filter-bar,
+    .guide-box,
+    .flash-list,
+    .data-table-toggle summary,
+    .btn { display: none !important; }
+
+    .shell { display: block !important; }
+    .main { margin: 0 !important; padding: 0 !important; }
+    body { background: #ffffff !important; color: #000000 !important; }
+
+    .panel, .kpi-card, .grid-2 > div {
+      border: 1px solid #999 !important;
+      box-shadow: none !important;
+      break-inside: avoid;
+    }
+    .model-badge { border: 1px solid #333 !important; color: #000 !important; background: none !important; }
+    canvas#trendChart { max-width: 100% !important; }
+
+    .print-footer { display: block !important; margin-top: 24px; font-size: 11px; color: #555; }
+  }
+  .print-footer { display: none; }
+</style>
 <div class="shell">
 
   <aside class="sidebar">
@@ -37,6 +65,69 @@
       <div class="model-badge model-badge--muted">Data historis saja (belum ada proyeksi)</div>
       {% endif %}
     </header>
+
+    <p class="data-range-note">
+      📅 Menampilkan data
+      {% if pengembang_aktif %}<strong>khusus {{ pengembang_aktif }}</strong>{% else %}<strong>seluruh Kabupaten Bungo</strong>{% endif %}
+      dari <strong>{{ data_mulai_label }}</strong> sampai <strong>{{ data_akhir_label }}</strong>.
+      {% if pengembang_aktif %}Tabel ringkasan semua pengembang disembunyikan sementara agar fokus ke {{ pengembang_aktif }} saja &mdash; klik "Reset ke Agregat" untuk melihat semua pengembang lagi.{% endif %}
+    </p>
+
+    {% if pengembang_aktif %}
+    <section class="panel panel-profil">
+      <div class="panel-head">
+        <h2>Profil Singkat {{ pengembang_aktif }}</h2>
+        <span class="panel-sub">Informasi tambahan di luar data realisasi KPR FLPP</span>
+      </div>
+      {% if profil_pengembang %}
+      <div class="profil-header-row" style="display:flex; align-items:center; gap:16px; margin-bottom: 14px;">
+        <div class="rumah-ikon-generik" style="flex-shrink:0; width:64px; height:64px; border-radius:8px; background:#f1f1f1; display:flex; align-items:center; justify-content:center;">
+          <!-- Ikon rumah generik (SVG buatan sendiri, bukan foto asli pengembang) -->
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M3 11L12 4L21 11" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M5 9.5V20H19V9.5" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="10" y="13" width="4" height="7" stroke="#555" stroke-width="1.8"/>
+          </svg>
+        </div>
+        <p style="font-size: 12px; color: #888; margin:0;">
+          Ilustrasi generik &mdash; bukan foto asli lokasi perumahan {{ pengembang_aktif }}.
+          Untuk foto dan denah resmi tiap lokasi perumahan, silakan lihat langsung di
+          <a href="https://sikumbang.tapera.go.id/" target="_blank" rel="noopener noreferrer">Sikumbang (BP Tapera)</a>.
+        </p>
+      </div>
+      <div class="metric-list">
+        {% if profil_pengembang.kecamatan or profil_pengembang.kelurahan %}
+        <div class="metric-row">
+          <span>📍 Lokasi</span>
+          <strong>{% if profil_pengembang.kelurahan %}Kel. {{ profil_pengembang.kelurahan }}{% endif %}{% if profil_pengembang.kelurahan and profil_pengembang.kecamatan %}, {% endif %}{% if profil_pengembang.kecamatan %}Kec. {{ profil_pengembang.kecamatan }}{% endif %}</strong>
+        </div>
+        {% endif %}
+        {% if profil_pengembang.tipe_rumah %}
+        <div class="metric-row"><span>🏠 Tipe rumah yang dibangun</span><strong>{{ profil_pengembang.tipe_rumah }}</strong></div>
+        {% endif %}
+        {% if profil_pengembang.catatan %}
+        <div class="metric-row"><span>📝 Catatan</span><strong>{{ profil_pengembang.catatan }}</strong></div>
+        {% endif %}
+      </div>
+      {% if profil_pengembang.peta_embed_url %}
+      <div class="peta-wrapper" style="margin-top: 16px;">
+        <p class="panel-sub" style="margin-bottom: 8px;">🗺️ Perkiraan area kecamatan/kelurahan (bukan titik lokasi persis)</p>
+        <iframe
+          src="{{ profil_pengembang.peta_embed_url }}"
+          width="100%"
+          height="280"
+          style="border:0; border-radius: 8px;"
+          allowfullscreen=""
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade">
+        </iframe>
+      </div>
+      {% endif %}
+      {% else %}
+      <p class="profil-kosong">Profil singkat untuk pengembang ini belum tersedia. Data pada halaman ini tetap dihitung dari riwayat realisasi KPR FLPP, terlepas dari kelengkapan profil.</p>
+      {% endif %}
+    </section>
+    {% endif %}
 
     {% with messages = get_flashed_messages(with_categories=true) %}
       {% if messages %}
@@ -76,10 +167,10 @@
         </select>
       </div>
       <div class="filter-field">
-        <label for="horizon">Horizon Peramalan</label>
+        <label for="horizon">Perkiraan untuk berapa bulan ke depan?</label>
         <select name="horizon" id="horizon">
-          {% for h in horizon_pilihan %}
-          <option value="{{ h }}" {{ 'selected' if h == horizon_aktif else '' }}>{{ h }} Bulan{{ ' (default Tujuan Penelitian)' if h == 12 else '' }}</option>
+          {% for opsi in horizon_opsi %}
+          <option value="{{ opsi.nilai }}" {{ 'selected' if opsi.nilai == horizon_aktif else '' }}>{{ opsi.label }}</option>
           {% endfor %}
         </select>
       </div>
@@ -251,6 +342,7 @@
     </section>
     {% endif %}
 
+    {% if not pengembang_aktif %}
     <section class="panel">
       <div class="panel-head">
         <h2>Ringkasan per Pengembang</h2>
@@ -277,6 +369,13 @@
         </tbody>
       </table>
     </section>
+    {% endif %}
+
+    <p class="print-footer">
+      Dicetak dari Sistem Prediksi Realisasi KPR FLPP Kabupaten Bungo &middot;
+      Data {{ data_mulai_label }} &ndash; {{ data_akhir_label }} &middot;
+      {% if pengembang_aktif %}Fokus: {{ pengembang_aktif }}{% else %}Cakupan: Seluruh Kabupaten Bungo{% endif %}
+    </p>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
     <script>

@@ -4,6 +4,7 @@ identifikasi -> estimasi -> pengujian diagnostik -> peramalan.
 
 Digunakan oleh app.py untuk memodelkan jumlah realisasi KPR FLPP.
 """
+import re
 import warnings
 import numpy as np
 import pandas as pd
@@ -21,6 +22,27 @@ except Exception:
     HAS_PMDARIMA = False
 
 
+# Beberapa nama pengembang pada data sumber (tapera.go.id) ditulis tidak
+# konsisten (beda kapitalisasi, ada akhiran ", PT" yang nyasar, atau salah
+# ketik ejaan), sehingga satu perusahaan yang sama bisa terhitung sebagai
+# beberapa "pengembang" berbeda. _normalize_nama_pengembang() menyeragamkan
+# penulisannya sebelum data diagregasi, supaya ringkasan per pengembang
+# (per_developer_summary) tidak pecah menjadi baris-baris duplikat.
+_TYPO_MANUAL = {
+    "PT UNO RESIDANCE PROPERTY": "PT UNO RESIDENCE PROPERTY",
+}
+
+
+def _normalize_nama_pengembang(nama: str) -> str:
+    n = str(nama).strip().upper()
+    n = re.sub(r",\s*PT$", "", n)          # buang akhiran ", PT" yang nyasar
+    n = re.sub(r"\s+", " ", n).strip()
+    if not n.startswith("PT "):
+        n = "PT " + n
+    n = _TYPO_MANUAL.get(n, n)
+    return n
+
+
 def load_data(csv_path: str) -> pd.DataFrame:
     """
     Muat data historis KPR FLPP.
@@ -30,12 +52,18 @@ def load_data(csv_path: str) -> pd.DataFrame:
     2. Format mentah tapera.go.id (transaksi per baris): kolom 'Tanggal Pencairan' dan
        'Nama Pengembang', dsb. Setiap baris merepresentasikan satu unit realisasi KPR FLPP.
        Format ini otomatis dikonversi menjadi skema (1) di atas.
+
+    Nama pengembang pada kedua format di atas dinormalisasi lewat
+    _normalize_nama_pengembang() agar variasi penulisan (kapitalisasi, akhiran
+    ", PT" yang nyasar, salah ketik ejaan) untuk perusahaan yang sama tidak
+    terhitung sebagai pengembang yang berbeda-beda.
     """
     raw = pd.read_csv(csv_path)
 
     if {"periode", "pengembang", "jumlah_realisasi"}.issubset(raw.columns):
         df = raw.copy()
         df["periode"] = pd.to_datetime(df["periode"])
+        df["pengembang"] = df["pengembang"].apply(_normalize_nama_pengembang)
         return df.sort_values("periode")
 
     if "Tanggal Pencairan" in raw.columns and "Nama Pengembang" in raw.columns:
@@ -45,7 +73,7 @@ def load_data(csv_path: str) -> pd.DataFrame:
             tgl = tgl.fillna(pd.to_datetime(raw["Tanggal Pencairan"], errors="coerce"))
         df = pd.DataFrame({
             "periode": tgl.dt.to_period("M").dt.to_timestamp(),
-            "pengembang": raw["Nama Pengembang"].astype(str).str.strip(),
+            "pengembang": raw["Nama Pengembang"].apply(_normalize_nama_pengembang),
             "jumlah_realisasi": 1,
         })
         df = df.dropna(subset=["periode"])
@@ -257,7 +285,28 @@ def run_full_pipeline(csv_path: str, forecast_steps: int = 12, pengembang: str =
     # diestimasi dengan ARIMA. Pada kondisi ini sistem tetap menampilkan data historis
     # apa adanya tanpa memaksakan proyeksi yang tidak bermakna secara statistik.
     MIN_OBSERVASI_ARIMA = 12
-    if len(monthly) < MIN_OBSERVASI_ARIMA:
+    # Pengembang dengan transaksi sangat jarang (mis. cuma 2-3 transaksi dalam
+    # rentang waktu panjang) bisa menghasilkan deret waktu yang, setelah
+    # interpolasi bulan-bulan kosong, nilainya konstan (tidak ada variasi sama
+    # sekali). Uji ADF tidak dapat dihitung pada deret konstan (menyebabkan error
+    # "x is constant" pada statsmodels), sehingga kondisi ini perlu ditangani
+    # sebelum masuk ke tahap uji stasioneritas.
+    data_kurang_bervariasi = monthly.nunique(dropna=True) <= 1
+
+    if len(monthly) < MIN_OBSERVASI_ARIMA or data_kurang_bervariasi:
+        if data_kurang_bervariasi:
+            pesan = (
+                "Data historis untuk pilihan ini tidak cukup bervariasi (transaksi "
+                "sangat jarang, sehingga setelah bulan-bulan kosong diisi, nilainya "
+                "menjadi datar/konstan) sehingga model ARIMA tidak dapat diestimasi "
+                "secara statistik. Menampilkan data historis tanpa proyeksi."
+            )
+        else:
+            pesan = (
+                f"Data historis untuk pilihan ini hanya {len(monthly)} bulan "
+                f"(minimum {MIN_OBSERVASI_ARIMA} bulan diperlukan agar estimasi ARIMA "
+                "cukup andal secara statistik). Menampilkan data historis tanpa proyeksi."
+            )
         return {
             "historis": monthly,
             "order": None,
@@ -268,11 +317,7 @@ def run_full_pipeline(csv_path: str, forecast_steps: int = 12, pengembang: str =
             "developer_summary": per_developer_summary(df_full),
             "using_pmdarima": False,
             "metode_identifikasi": None,
-            "peringatan": (
-                f"Data historis untuk pilihan ini hanya {len(monthly)} bulan "
-                f"(minimum {MIN_OBSERVASI_ARIMA} bulan diperlukan agar estimasi ARIMA "
-                "cukup andal secara statistik). Menampilkan data historis tanpa proyeksi."
-            ),
+            "peringatan": pesan,
             "daftar_pengembang": daftar_pengembang,
             "pengembang_aktif": pengembang if pengembang in daftar_pengembang else None,
             "forecast_steps": forecast_steps,

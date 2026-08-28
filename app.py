@@ -31,7 +31,10 @@ import os
 import shutil
 import logging
 from datetime import datetime, timedelta, timezone
+from typing import Optional
+from urllib.parse import quote_plus
 
+import pandas as pd
 from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
 from flask_login import (
     LoginManager, UserMixin, login_user, login_required,
@@ -48,6 +51,7 @@ DATA_DIR = os.path.join(BASE_DIR, "data")
 DATA_PATH = os.path.join(DATA_DIR, "dataset_flpp_raw.csv")
 DATA_BACKUP_PATH = os.path.join(DATA_DIR, "dataset_flpp_raw.backup.csv")
 UPLOAD_TMP_PATH = os.path.join(DATA_DIR, "_upload_tmp.csv")
+PROFIL_PENGEMBANG_PATH = os.path.join(DATA_DIR, "profil_pengembang.csv")
 
 ALLOWED_EXTENSIONS = {"csv"}
 
@@ -122,6 +126,65 @@ def _allowed_file(filename: str) -> bool:
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
+_BULAN_ID = [
+    "Jan", "Feb", "Mar", "Apr", "Mei", "Jun",
+    "Jul", "Agu", "Sep", "Okt", "Nov", "Des",
+]
+
+
+def _format_bulan_id(dt) -> str:
+    """Format tanggal jadi 'Feb 2022', 'Mei 2024', dst. (bahasa awam, bukan istilah teknis)."""
+    return f"{_BULAN_ID[dt.month - 1]} {dt.year}"
+
+
+def _load_profil_pengembang(nama_pengembang: str) -> Optional[dict]:
+    """
+    Ambil info tambahan (lokasi, tipe rumah, catatan) untuk satu pengembang,
+    dari berkas data/profil_pengembang.csv (opsional, diisi manual oleh peneliti
+    berdasarkan hasil survei/observasi lapangan, BUKAN diperkirakan sistem).
+
+    Mengembalikan None jika berkas belum ada, atau jika pengembang tersebut
+    belum memiliki data profil apa pun (semua kolom kosong) — supaya tampilan
+    tidak menampilkan panel kosong yang membingungkan.
+    """
+    if not nama_pengembang or not os.path.exists(PROFIL_PENGEMBANG_PATH):
+        return None
+    try:
+        df_profil = pd.read_csv(PROFIL_PENGEMBANG_PATH, dtype=str).fillna("")
+        row = df_profil[df_profil["pengembang"].str.strip() == nama_pengembang.strip()]
+        if row.empty:
+            return None
+        row = row.iloc[0]
+        profil = {
+            "kecamatan": row.get("kecamatan", "").strip(),
+            "kelurahan": row.get("kelurahan", "").strip(),
+            "tipe_rumah": row.get("tipe_rumah", "").strip(),
+            "catatan": row.get("catatan", "").strip(),
+        }
+        # Kalau semua kolom kosong (baris ada tapi belum diisi), anggap belum tersedia.
+        if not any(profil.values()):
+            return None
+
+        # Tautan peta (Google Maps embed gratis, TANPA API key) — dibuat dari
+        # kecamatan/kelurahan yang sudah ada di profil, bukan koordinat pasti,
+        # karena kita tidak punya data lat/long presisi per lokasi perumahan.
+        # Ini hanya menunjukkan area kecamatan/kelurahannya secara umum, bukan
+        # titik lokasi persis rumah/kantor pengembang.
+        if profil["kecamatan"] or profil["kelurahan"]:
+            bagian_lokasi = " ".join(filter(None, [profil["kelurahan"], profil["kecamatan"]]))
+            query = f"{bagian_lokasi}, Kabupaten Bungo, Jambi"
+            profil["peta_embed_url"] = (
+                "https://www.google.com/maps?q=" + quote_plus(query) + "&output=embed"
+            )
+        else:
+            profil["peta_embed_url"] = None
+
+        return profil
+    except Exception:
+        logger.exception("Gagal membaca profil_pengembang.csv")
+        return None
+
+
 def _data_status() -> dict:
     """Ringkasan status file data saat ini, ditampilkan di halaman admin."""
     if not os.path.exists(DATA_PATH):
@@ -194,6 +257,27 @@ def dashboard():
         "total_proyeksi_horizon": float(forecast_df["prediksi"].sum()) if ada_proyeksi else None,
     }
 
+    # Rentang data historis milik pengembang yang sedang dipilih (atau seluruh
+    # Kabupaten Bungo jika tidak ada filter). Dipakai untuk menampilkan info
+    # "data sejak ..." dengan bahasa awam, bukan istilah teknis "horizon".
+    if len(historis):
+        data_mulai_label = _format_bulan_id(historis.index.min())
+        data_akhir_label = _format_bulan_id(historis.index.max())
+    else:
+        data_mulai_label = data_akhir_label = "-"
+
+    # Opsi dropdown horizon peramalan, dengan label bahasa awam + info rentang
+    # data historis, dihitung ulang setiap kali (menyesuaikan pengembang aktif).
+    horizon_opsi = []
+    for h in ALLOWED_HORIZONS:
+        label = f"{h} Bulan ke depan"
+        if h == 12:
+            label += " (disarankan)"
+        label += f" — data sejak {data_mulai_label}"
+        horizon_opsi.append({"nilai": h, "label": label})
+
+    profil_pengembang = _load_profil_pengembang(result["pengembang_aktif"])
+
     return render_template(
         "dashboard.html",
         has_data=True,
@@ -207,6 +291,10 @@ def dashboard():
         kpi=kpi,
         using_pmdarima=result["using_pmdarima"],
         daftar_pengembang=result["daftar_pengembang"],
+        data_mulai_label=data_mulai_label,
+        data_akhir_label=data_akhir_label,
+        horizon_opsi=horizon_opsi,
+        profil_pengembang=profil_pengembang,
         pengembang_aktif=result["pengembang_aktif"],
         horizon_aktif=horizon,
         horizon_pilihan=ALLOWED_HORIZONS,
