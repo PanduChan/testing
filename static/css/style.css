@@ -586,3 +586,159 @@ h1, h2 { font-family: 'Fraunces', serif; margin: 0; }
     width: 20%;
   }
 }
+
+
+/* ==========================================================
+   TYPOGRAPHY CONSISTENCY — revisi tampilan
+   Satu keluarga font untuk seluruh website, dengan ukuran
+   konsisten berdasarkan fungsi elemen.
+   ========================================================== */
+
+:root {
+  --font-main: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --fs-xs: 0.80rem;
+  --fs-sm: 0.90rem;
+  --fs-base: 1rem;
+  --fs-section: 1.15rem;
+  --fs-page: 1.70rem;
+  --fs-kpi: 2rem;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea,
+table,
+code,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.login-eyebrow,
+.login-title,
+.login-sub,
+.login-form label,
+.login-form input,
+.login-form button,
+.login-hint,
+.brand-mark,
+.brand-name,
+.side-link,
+.side-footer,
+.eyebrow,
+.model-badge,
+.kpi-label,
+.kpi-value,
+.kpi-unit,
+.panel-sub,
+.metric-row,
+.metric-row strong,
+.data-table,
+.data-table th,
+.data-table td,
+.upload-zone input[type="file"],
+.upload-hint,
+.upload-hint code,
+.btn,
+.status-badge,
+.filter-field label,
+.filter-field select,
+.filter-bar .btn,
+.horizon-note,
+.guide-box,
+.guide-box summary,
+.guide-content,
+.info-dot,
+.chart-insight,
+.data-table-toggle summary {
+  font-family: var(--font-main);
+}
+
+body {
+  font-size: var(--fs-base);
+  line-height: 1.5;
+}
+
+h1,
+.topbar h1,
+.login-title {
+  font-size: var(--fs-page);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+h2,
+.panel-head h2 {
+  font-size: var(--fs-section);
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.side-link,
+.metric-row,
+.data-table,
+.login-form input,
+.login-form button,
+.btn,
+.filter-field select,
+.filter-bar .btn,
+.guide-box,
+.chart-insight {
+  font-size: var(--fs-sm);
+}
+
+.login-eyebrow,
+.login-form label,
+.login-hint,
+.brand-mark,
+.eyebrow,
+.model-badge,
+.kpi-label,
+.kpi-unit,
+.panel-sub,
+.data-table th,
+.upload-zone input[type="file"],
+.upload-hint,
+.status-badge,
+.filter-field label,
+.horizon-note,
+.data-table-toggle summary,
+.side-footer {
+  font-size: var(--fs-xs);
+}
+
+.kpi-value {
+  font-size: var(--fs-kpi);
+  font-weight: 700;
+}
+
+.brand-name {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  body {
+    font-size: 0.95rem;
+  }
+
+  .side-link,
+  .data-table,
+  .data-table th,
+  .data-table td {
+    font-size: var(--fs-xs);
+  }
+
+  .topbar h1,
+  .login-title {
+    font-size: 1.45rem;
+  }
+
+  .kpi-value {
+    font-size: 1.75rem;
+  }
+}
